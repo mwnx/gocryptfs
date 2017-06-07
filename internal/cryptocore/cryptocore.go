@@ -119,7 +119,7 @@ func New(key []byte, aeadType AEADTypeEnum, IVBitLen int, useHKDF bool, forceDec
 		EMECipher:   emeCipher,
 		AEADCipher:  aeadCipher,
 		AEADBackend: aeadType,
-		IVGenerator: &nonceGenerator{nonceLen: IVLen},
+		IVGenerator: newNonceGen(IVLen),
 		IVLen:       IVLen,
 	}
 }

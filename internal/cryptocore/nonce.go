@@ -24,10 +24,32 @@ func RandUint64() uint64 {
 
 type nonceGenerator struct {
 	nonceLen int // bytes
+	fifo     chan []byte
+}
+
+const (
+	nonceGenThreads = 1
+	nonceFifoDepth  = 10
+)
+
+func newNonceGen(l int) *nonceGenerator {
+	n := nonceGenerator{
+		nonceLen: l,
+		fifo:     make(chan []byte, nonceFifoDepth),
+	}
+	for i := 0; i < nonceGenThreads; i++ {
+		go n.collect()
+	}
+	return &n
+}
+
+func (n *nonceGenerator) collect() {
+	for {
+		n.fifo <- RandBytes(n.nonceLen)
+	}
 }
 
 // Get a random "nonceLen"-byte nonce
 func (n *nonceGenerator) Get() []byte {
-	nonce := RandBytes(n.nonceLen)
-	return nonce
+	return <-n.fifo
 }
