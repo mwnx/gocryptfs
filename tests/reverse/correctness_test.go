@@ -28,13 +28,9 @@ func TestLongnameStat(t *testing.T) {
 		}
 		test_helpers.VerifySize(t, path, 0)
 		// A large number of longname files is a performance problem in
-		// reverse mode. Move the file out of the way once we are done with it
-		// to speed up the test (2 seconds -> 0.2 seconds).
-		// We do NOT unlink it because ext4 reuses inode numbers immediately,
-		// which will cause "Found linked inode, but Nlink == 1" warnings and
-		// file not found errors.
-		// TODO: This problem should be handled at the go-fuse level.
-		syscall.Rename(dirA+"/"+name, test_helpers.TmpDir+"/"+fmt.Sprintf("x%d", i))
+		// reverse mode. Delete the file once we are done with it to speed up
+		// the test (2 seconds -> 0.2 seconds)
+		syscall.Unlink(dirA + "/" + name)
 	}
 }
 
