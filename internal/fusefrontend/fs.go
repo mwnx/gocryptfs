@@ -10,8 +10,6 @@ import (
 	"syscall"
 	"time"
 
-	"golang.org/x/sys/unix"
-
 	"github.com/hanwen/go-fuse/fuse"
 	"github.com/hanwen/go-fuse/fuse/nodefs"
 	"github.com/hanwen/go-fuse/fuse/pathfs"
@@ -23,6 +21,8 @@ import (
 	"github.com/rfjakob/gocryptfs/internal/syscallcompat"
 	"github.com/rfjakob/gocryptfs/internal/tlog"
 )
+
+const _AT_SYMLINK_NOFOLLOW = 0x100
 
 // FS implements the go-fuse virtual filesystem interface.
 type FS struct {
@@ -309,7 +309,7 @@ func (fs *FS) Mknod(path string, mode uint32, dev uint32, context *fuse.Context)
 	// Set owner
 	if fs.args.PreserveOwner {
 		err = syscallcompat.Fchownat(int(dirfd.Fd()), cName, int(context.Owner.Uid),
-			int(context.Owner.Gid), unix.AT_SYMLINK_NOFOLLOW)
+			int(context.Owner.Gid), _AT_SYMLINK_NOFOLLOW)
 		if err != nil {
 			tlog.Warn.Printf("Mknod: Fchownat failed: %v", err)
 		}
@@ -431,18 +431,17 @@ func (fs *FS) Symlink(target string, linkName string, context *fuse.Context) (co
 		err = os.Symlink(target, cPath)
 		return fuse.ToStatus(err)
 	}
+	dirfd, err := os.Open(filepath.Dir(cPath))
+	if err != nil {
+		return fuse.ToStatus(err)
+	}
+	defer dirfd.Close()
 	// Symlinks are encrypted like file contents (GCM) and base64-encoded
 	cBinTarget := fs.contentEnc.EncryptBlock([]byte(target), 0, nil)
 	cTarget := fs.nameTransform.B64.EncodeToString(cBinTarget)
 	// Handle long file name
 	cName := filepath.Base(cPath)
 	if nametransform.IsLongContent(cName) {
-		var dirfd *os.File
-		dirfd, err = os.Open(filepath.Dir(cPath))
-		if err != nil {
-			return fuse.ToStatus(err)
-		}
-		defer dirfd.Close()
 		// Create ".name" file
 		err = fs.nameTransform.WriteLongName(dirfd, cName, linkName)
 		if err != nil {
@@ -463,9 +462,10 @@ func (fs *FS) Symlink(target string, linkName string, context *fuse.Context) (co
 	}
 	// Set owner
 	if fs.args.PreserveOwner {
-		err = os.Lchown(cPath, int(context.Owner.Uid), int(context.Owner.Gid))
+		err = syscallcompat.Fchownat(int(dirfd.Fd()), cName, int(context.Owner.Uid),
+			int(context.Owner.Gid), _AT_SYMLINK_NOFOLLOW)
 		if err != nil {
-			tlog.Warn.Printf("Mknod: Lchown failed: %v", err)
+			tlog.Warn.Printf("Symlink: Fchownat failed: %v", err)
 		}
 	}
 	return fuse.OK
