@@ -28,12 +28,18 @@ script:
   - chmod +x dep
   - ./dep ensure
   - ./build.bash
+  - echo "rebuild with gccgo"
+  - git clean -dxf
+  - go-6 version
+  - env -u GOROOT go-6 build
 
 # fuse on travis
 sudo: required
 dist: trusty
 before_install:
-  - sudo apt-get install -qq fuse
+  - sudo add-apt-repository -y ppa:ubuntu-toolchain-r/test
+  - sudo apt-get update -qq
+  - sudo apt-get install -qq fuse gccgo-6
   - sudo modprobe fuse
   - sudo chmod 666 /dev/fuse
   - sudo chown root:$USER /etc/fuse.conf
