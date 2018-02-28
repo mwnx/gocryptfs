@@ -1,5 +1,9 @@
 language: go
 
+os:
+  - linux
+  - osx
+
 git:
   depth: 100
 
