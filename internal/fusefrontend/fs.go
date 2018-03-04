@@ -240,8 +240,29 @@ func (fs *FS) Chmod(path string, mode uint32, context *fuse.Context) (code fuse.
 	defer dirfd.Close()
 	// os.Chmod goes through the "syscallMode" translation function that messes
 	// up the suid and sgid bits. So use a syscall directly.
-	err = syscallcompat.Fchmodat(int(dirfd.Fd()), cName, mode, unix.AT_SYMLINK_NOFOLLOW)
-	return fuse.ToStatus(err)
+	code = fuse.ToStatus(syscallcompat.Fchmodat(int(dirfd.Fd()), cName, mode, unix.AT_SYMLINK_NOFOLLOW))
+	if !code.Ok() {
+		return code
+	}
+	if !fs.args.PlaintextNames {
+		// When filename encryption is active, every directory contains
+		// a "gocryptfs.diriv" file. This file should also change permissions
+		// to allow other users mouting the directory to be able to at least
+		// read the directory (in accordance with the directory's permissions).
+		// We always allow read-access for the user.
+		var ivMode uint32 = 0400
+		if (mode & 0070 != 0) {
+			ivMode = ivMode | 0040
+		}
+		if (mode & 0007 != 0) {
+			ivMode = ivMode | 0004
+		}
+		// Instead of checking if "cName" is a directory, we just blindly
+		// execute the chown on "cName/gocryptfs.diriv" and ignore errors.
+		dirIVPath := filepath.Join(cName, nametransform.DirIVFilename)
+		syscallcompat.Fchmodat(int(dirfd.Fd()), dirIVPath, ivMode, unix.AT_SYMLINK_NOFOLLOW)
+	}
+	return fuse.OK
 }
 
 // Chown implements pathfs.Filesystem.
